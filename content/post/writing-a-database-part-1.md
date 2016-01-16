@@ -5,7 +5,6 @@ title = "Writing a database in Go: Part 1"
 
 +++
 
-
 Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations. But obviously it depends on what it is you are building...
 
 ##### In this series...
