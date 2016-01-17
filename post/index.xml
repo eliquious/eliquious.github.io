@@ -86,9 +86,7 @@ CREATE KEYSPACE users.settings WITH KEYS username, setting
 &lt;pre&gt;&lt;code&gt;SELECT FROM users.settings WHERE user = &amp;quot;eliquious&amp;quot; AND setting = &amp;quot;email&amp;quot;;
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;The query above would return the email for the user &lt;code&gt;eliquious&lt;/code&gt;.&lt;/p&gt;
-
-&lt;p&gt;Additionally, the efficient range scans would allow for queries like this:&lt;/p&gt;
+&lt;p&gt;The query above would return the email for the user &lt;code&gt;eliquious&lt;/code&gt;. Additionally, the efficient range scans would allow for queries like this:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;SELECT FROM users.messages WHERE user = &amp;quot;eliquious&amp;quot; AND
     time BETWEEN &amp;quot;2016-12-16&amp;quot; AND &amp;quot;2016-01-16&amp;quot;;
