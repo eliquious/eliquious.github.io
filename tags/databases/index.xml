@@ -6,8 +6,178 @@
     <description>Recent content in Databases on Squirrels</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 15 Jan 2016 00:21:42 -0600</lastBuildDate>
+    <lastBuildDate>Sat, 16 Jan 2016 20:02:44 -0600</lastBuildDate>
     <atom:link href="http://eliquious.github.io/tags/databases/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Writing a database in Go: Part 2</title>
+      <link>http://eliquious.github.io/post/writing-a-database-part-2/</link>
+      <pubDate>Sat, 16 Jan 2016 20:02:44 -0600</pubDate>
+      
+      <guid>http://eliquious.github.io/post/writing-a-database-part-2/</guid>
+      <description>
+
+&lt;p&gt;&lt;/br&gt;&lt;/p&gt;
+
+&lt;p&gt;This is a continuation of the &lt;a href=&#34;https://eliquious.github.io/post/writing-a-database-part-1/&#34; title=&#34;Part 1: Data model and query language&#34;&gt;first part&lt;/a&gt; of this series where we discussed the data model and query language for this new database. In this second part we will setup our lexer.&lt;/p&gt;
+
+&lt;h3 id=&#34;lexing:753b520aaeb3b1a1101bfc74aa667f0c&#34;&gt;Lexing&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Lexical_analysis/&#34; title=&#34;Wikipedia: Lexical Analysis&#34;&gt;Lexing&lt;/a&gt; is the process for transforming a textual input into tokens representing each keyword, character or puncuation. Fortunately, there&amp;rsquo;s little we have to do for lexing the input due to a &lt;a href=&#34;https://github.com/eliquious/lexer&#34;&gt;library&lt;/a&gt; I have written previous.&lt;/p&gt;
+
+&lt;p&gt;The library already handles a large majority of the syntax of the query language we designed previously. However, we will need to create the keyword tokens. We revist the first post and simply record each keyword as a constant.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package lexer
+
+import (
+    &amp;quot;github.com/eliquious/lexer&amp;quot;
+)
+
+const (
+    // Starts the keywords with an offset from the built in tokens so our new tokens don&#39;t overlap.
+    startKeywords lexer.Token = iota + 1000
+
+    // CREATE starts a CREATE KEYSPACE query.
+    CREATE
+
+    // SELECT starts a SELECT FROM query.
+    SELECT
+
+    // DELETE deletes keys from a keyspace.
+    DELETE
+
+    // DROP deletes an entire keyspace.
+    DROP
+
+    // FROM specifies which keyspace to select and delete from.
+    FROM
+
+    // WHERE allows for key filtering when selecting or deleting.
+    WHERE
+
+    // KEYSPACE signifies what is being created.
+    KEYSPACE
+
+    // WITH is used to prefix query options.
+    WITH
+
+    // KEY signifies a key attribute follows.
+    KEY
+
+    // KEYS signifies several key attributes follow.
+    KEYS
+    endKeywords
+
+    // Separates the keywords from the conditionals
+    startConditionals
+
+    // BETWEEN filters an attribute by two values.
+    BETWEEN
+    endConditionals
+)
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now that the tokens are created we need to load them into the lexer. This is super easy to do. We just create a map of the tokens we want to add and call &lt;code&gt;lexer.LoadTokenMap()&lt;/code&gt;.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func init() {
+    // Loads keyword tokens into lexer
+    lexer.LoadTokenMap(tokenMap)
+}
+
+var tokenMap = map[lexer.Token]string{
+    CREATE:   &amp;quot;CREATE&amp;quot;,
+    SELECT:   &amp;quot;SELECT&amp;quot;,
+    DELETE:   &amp;quot;DELETE&amp;quot;,
+    DROP:     &amp;quot;DROP&amp;quot;,
+    FROM:     &amp;quot;FROM&amp;quot;,
+    WHERE:    &amp;quot;WHERE&amp;quot;,
+    KEYSPACE: &amp;quot;KEYSPACE&amp;quot;,
+    WITH:     &amp;quot;WITH&amp;quot;,
+    KEY:      &amp;quot;KEY&amp;quot;,
+    BETWEEN:  &amp;quot;BETWEEN&amp;quot;,
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;testing-the-lexer:753b520aaeb3b1a1101bfc74aa667f0c&#34;&gt;Testing the lexer&lt;/h4&gt;
+
+&lt;p&gt;Now we need to test to see if the keywords have been loaded and the lexer can lex our input. To test the lexer we can write a short program to read from &lt;code&gt;os.Stdin&lt;/code&gt; and print the tokens as well as their locations.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+        &amp;quot;flag&amp;quot;
+        &amp;quot;fmt&amp;quot;
+        &amp;quot;os&amp;quot;
+        &amp;quot;strconv&amp;quot;
+
+        &amp;quot;github.com/eliquious/lexer&amp;quot;
+        _ &amp;quot;github.com/eliquious/prefixdb/lexer&amp;quot;
+)
+
+var skipWhitespace = flag.Bool(&amp;quot;w&amp;quot;, false, &amp;quot;skip whitespace tokens&amp;quot;)
+
+func main() {
+        flag.Parse()
+        l := lexer.NewScanner(os.Stdin)
+        for {
+                tok, pos, lit := l.Scan()
+
+                // exit if EOF
+                if tok == lexer.EOF {
+                        break
+                }
+
+                // skip whitespace tokens
+                if tok == lexer.WS &amp;amp;&amp;amp; *skipWhitespace {
+                        continue
+                }
+
+                // Print token
+                if len(lit) &amp;gt; 0 {
+                        fmt.Printf(&amp;quot;[%4d:%-3d] %10s - %s\n&amp;quot;, pos.Line, pos.Char, tok, strconv.QuoteToASCII(lit))
+                } else {
+                        fmt.Printf(&amp;quot;[%4d:%-3d] %10s\n&amp;quot;, pos.Line, pos.Char, tok)
+                }
+        }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now that we have a simple tool, let&amp;rsquo;s test some queries.&lt;/p&gt;
+
+&lt;h4 id=&#34;lexer-output:753b520aaeb3b1a1101bfc74aa667f0c&#34;&gt;Lexer Output&lt;/h4&gt;
+
+&lt;p&gt;&lt;code&gt;CREATE KEYSPACE&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo &amp;quot;CREATE KEYSPACE users WITH KEY username&amp;quot; | ./lexer -w=true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[   0:0  ]     CREATE
+[   0:7  ]   KEYSPACE
+[   0:16 ]      IDENT - &amp;quot;users&amp;quot;
+[   0:22 ]       WITH
+[   0:27 ]        KEY
+[   0:31 ]      IDENT - &amp;quot;username&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;SELECT&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo &amp;quot;SELECT FROM users WHERE username = &#39;eliquious&#39;&amp;quot; | ./lexer -w=true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[   0:0  ]     SELECT
+[   0:7  ]       FROM
+[   0:12 ]      IDENT - &amp;quot;users&amp;quot;
+[   0:18 ]      WHERE
+[   0:24 ]      IDENT - &amp;quot;username&amp;quot;
+[   0:33 ]          =
+[   0:34 ]    TEXTUAL - &amp;quot;eliquious&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;I could show all the queries, but I&amp;rsquo;ll let you run the rest of them. Setting up the lexer didn&amp;rsquo;t take much time at all, but the parser and AST nodes will take a while longer. We&amp;rsquo;ll tackle those next time.&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Writing a database in Go: Part 1</title>
