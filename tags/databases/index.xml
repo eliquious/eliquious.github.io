@@ -6,13 +6,13 @@
     <description>Recent content in Databases on Squirrels</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 16 Jan 2016 00:21:42 -0600</lastBuildDate>
+    <lastBuildDate>Fri, 15 Jan 2016 00:21:42 -0600</lastBuildDate>
     <atom:link href="http://eliquious.github.io/tags/databases/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
       <title>Writing a database in Go: Part 1</title>
       <link>http://eliquious.github.io/post/writing-a-database-part-1/</link>
-      <pubDate>Sat, 16 Jan 2016 00:21:42 -0600</pubDate>
+      <pubDate>Fri, 15 Jan 2016 00:21:42 -0600</pubDate>
       
       <guid>http://eliquious.github.io/post/writing-a-database-part-1/</guid>
       <description>

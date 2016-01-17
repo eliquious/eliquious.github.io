@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]><html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]><html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]><html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--><html class="no-js" prefix="og: http://ogp.me/ns#" xmlns:og="http://ogp.me/ns#"><!--<![endif]-->
+
+    <head>
+                <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="description" content="Lexing">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black">
+        <meta name="author" content="">
+        <meta name="keywords" content="awesome, definitely">
+	
+        <meta property="og:site_name" content="Squirrels">
+        <meta property="og:title" content="Squirrels">
+        <meta property="og:url" content="http://eliquious.github.io/post/writing-a-database-part-2/">
+        <meta property="og:description" content="Chasing them one day at a time">
+    
+        <meta property="og:type" content="article" />
+        <meta property="og:article:author" content="" />
+        <meta property="og:article:published_time" content="2016-01-16T20:02:44-06:00" />
+    
+        <meta name="generator" content="Hugo 0.16-DEV" />
+        <title>Writing a database in Go: Part 2 &middot; Squirrels </title>
+        <link rel="canonical" href="http://eliquious.github.io/" />
+        <link rel="alternate" type="application/rss+xml" title="RSS" href="">
+        <link rel="stylesheet" type='text/css' href="http://eliquious.github.io/css/main.css"/>
+        <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:300|Montserrat:700' rel='stylesheet' type='text/css'>
+        <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+        <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+    </head>
+<body>
+<!--[if lt IE 7]><p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chrome/‎">install Google Chrome</a> to experience this site.</p><![endif]-->
+
+    <header id="site-header">
+        <div class="container">
+            <a href="http://eliquious.github.io/" alt="Squirrels"><h1 class="blog-title heading">Squirrels</h1></a>
+            <p class="blog-description">Chasing them one day at a time</p>
+        </div>
+    </header>
+<main class="content" role="main">
+	<div class="container">
+		<article class="post">
+	<header class="post-header">
+        <h2 class="p-post-title">Writing a database in Go: Part 2</h2>
+        <p class="blog-description">Lexing</p>
+    </header>
+
+    <section class="post-content">
+        
+
+<p></br></p>
+
+<p>This is a continuation of the <a href="https://eliquious.github.io/post/writing-a-database-part-1/" title="Part 1: Data model and query language">first part</a> of this series where we discussed the data model and query language for this new database. In this second part we will setup our lexer.</p>
+
+<h3 id="lexing:753b520aaeb3b1a1101bfc74aa667f0c">Lexing</h3>
+
+<p><a href="https://en.wikipedia.org/wiki/Lexical_analysis/" title="Wikipedia: Lexical Analysis">Lexing</a> is the process for transforming a textual input into tokens representing each keyword, character or puncuation. Fortunately, there&rsquo;s little we have to do for lexing the input due to a <a href="https://github.com/eliquious/lexer">library</a> I have written previous.</p>
+
+<p>The library already handles a large majority of the syntax of the query language we designed previously. However, we will need to create the keyword tokens. We revist the first post and simply record each keyword as a constant.</p>
+
+<pre><code>package lexer
+
+import (
+    &quot;github.com/eliquious/lexer&quot;
+)
+
+const (
+    // Starts the keywords with an offset from the built in tokens so our new tokens don't overlap.
+    startKeywords lexer.Token = iota + 1000
+
+    // CREATE starts a CREATE KEYSPACE query.
+    CREATE
+
+    // SELECT starts a SELECT FROM query.
+    SELECT
+
+    // DELETE deletes keys from a keyspace.
+    DELETE
+
+    // DROP deletes an entire keyspace.
+    DROP
+
+    // FROM specifies which keyspace to select and delete from.
+    FROM
+
+    // WHERE allows for key filtering when selecting or deleting.
+    WHERE
+
+    // KEYSPACE signifies what is being created.
+    KEYSPACE
+
+    // WITH is used to prefix query options.
+    WITH
+
+    // KEY signifies a key attribute follows.
+    KEY
+
+    // KEYS signifies several key attributes follow.
+    KEYS
+    endKeywords
+
+    // Separates the keywords from the conditionals
+    startConditionals
+
+    // BETWEEN filters an attribute by two values.
+    BETWEEN
+    endConditionals
+)
+
+</code></pre>
+
+<p>Now that the tokens are created we need to load them into the lexer. This is super easy to do. We just create a map of the tokens we want to add and call <code>lexer.LoadTokenMap()</code>.</p>
+
+<pre><code>func init() {
+    // Loads keyword tokens into lexer
+    lexer.LoadTokenMap(tokenMap)
+}
+
+var tokenMap = map[lexer.Token]string{
+    CREATE:   &quot;CREATE&quot;,
+    SELECT:   &quot;SELECT&quot;,
+    DELETE:   &quot;DELETE&quot;,
+    DROP:     &quot;DROP&quot;,
+    FROM:     &quot;FROM&quot;,
+    WHERE:    &quot;WHERE&quot;,
+    KEYSPACE: &quot;KEYSPACE&quot;,
+    WITH:     &quot;WITH&quot;,
+    KEY:      &quot;KEY&quot;,
+    BETWEEN:  &quot;BETWEEN&quot;,
+}
+
+</code></pre>
+
+<h4 id="testing-the-lexer:753b520aaeb3b1a1101bfc74aa667f0c">Testing the lexer</h4>
+
+<p>Now we need to test to see if the keywords have been loaded and the lexer can lex our input. To test the lexer we can write a short program to read from <code>os.Stdin</code> and print the tokens as well as their locations.</p>
+
+<pre><code>package main
+
+import (
+        &quot;flag&quot;
+        &quot;fmt&quot;
+        &quot;os&quot;
+        &quot;strconv&quot;
+
+        &quot;github.com/eliquious/lexer&quot;
+        _ &quot;github.com/eliquious/prefixdb/lexer&quot;
+)
+
+var skipWhitespace = flag.Bool(&quot;w&quot;, false, &quot;skip whitespace tokens&quot;)
+
+func main() {
+        flag.Parse()
+        l := lexer.NewScanner(os.Stdin)
+        for {
+                tok, pos, lit := l.Scan()
+
+                // exit if EOF
+                if tok == lexer.EOF {
+                        break
+                }
+
+                // skip whitespace tokens
+                if tok == lexer.WS &amp;&amp; *skipWhitespace {
+                        continue
+                }
+
+                // Print token
+                if len(lit) &gt; 0 {
+                        fmt.Printf(&quot;[%4d:%-3d] %10s - %s\n&quot;, pos.Line, pos.Char, tok, strconv.QuoteToASCII(lit))
+                } else {
+                        fmt.Printf(&quot;[%4d:%-3d] %10s\n&quot;, pos.Line, pos.Char, tok)
+                }
+        }
+}
+</code></pre>
+
+<p>Now that we have a simple tool, let&rsquo;s test some queries.</p>
+
+<h4 id="lexer-output:753b520aaeb3b1a1101bfc74aa667f0c">Lexer Output</h4>
+
+<p><code>CREATE KEYSPACE</code></p>
+
+<pre><code>echo &quot;CREATE KEYSPACE users WITH KEY username&quot; | ./lexer -w=true
+</code></pre>
+
+<pre><code>[   0:0  ]     CREATE
+[   0:7  ]   KEYSPACE
+[   0:16 ]      IDENT - &quot;users&quot;
+[   0:22 ]       WITH
+[   0:27 ]        KEY
+[   0:31 ]      IDENT - &quot;username&quot;
+</code></pre>
+
+<p><code>SELECT</code></p>
+
+<pre><code>echo &quot;SELECT FROM users WHERE username = 'eliquious'&quot; | ./lexer -w=true
+</code></pre>
+
+<pre><code>[   0:0  ]     SELECT
+[   0:7  ]       FROM
+[   0:12 ]      IDENT - &quot;users&quot;
+[   0:18 ]      WHERE
+[   0:24 ]      IDENT - &quot;username&quot;
+[   0:33 ]          =
+[   0:34 ]    TEXTUAL - &quot;eliquious&quot;
+</code></pre>
+
+<p>I could show all the queries, but I&rsquo;ll let you run the rest of them. Setting up the lexer didn&rsquo;t take much time at all, but the parser and AST nodes will take a while longer. We&rsquo;ll tackle those next time.</p>
+
+    </section>
+
+    <hr>
+
+    <footer class="post-footer">
+        <section class="f-1">
+            
+
+            <p class="f-post-time"><time datetime="2016-01-16T20:02:44-06:00">January 16, 2016</time></p>
+        </section>
+
+        <section class="f-2">
+            <section class="share">
+                <span>Share:
+                <a class="icon-twitter" href="http://twitter.com/share?text=Writing%20a%20database%20in%20Go%3a%20Part%202&url=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-2%2f"
+                    onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                    <i class="fa fa-twitter"></i>
+                </a>
+                <a class="icon-facebook" href="https://www.facebook.com/sharer/sharer.php?u=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-2%2f"
+                    onclick="window.open(this.href, 'facebook-share','width=580,height=296');return false;">
+                    <i class="fa fa-facebook"></i>
+                </a>
+                <a class="icon-google-plus" href="https://plus.google.com/share?url=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-2%2f"
+                   onclick="window.open(this.href, 'google-plus-share', 'width=490,height=530');return false;">
+                    <i class="fa fa-google-plus"></i>
+                </a>
+                </span>
+            </section>
+
+            
+        </section>
+                
+    </footer>
+</article>
+	</div>
+</main>
+    <footer id="site-footer">
+        <div class="container">
+            <a href="http://eliquious.github.io/index.xml" title="Get the RSS feed"><span class="tooltip"><i class="fa fa-rss"></i></span></a>
+            <section>&copy; <a href="http://eliquious.github.io/"></a> 2015 | All rights reserved</section>
+            <section>Theme by <a href="http://www.jrdnbwmn.com">Jordan Bowman</a>. Generated with <a href="http://gohugo.io/">Hugo</a>.</section>
+        </div>
+    </footer>
+
+    <script type="text/javascript" src="http://eliquious.github.io/js/fittext.js"></script>
+    <script type="text/javascript">
+      $(".heading").fitText();
+    </script>
+
+
+</body>
+</html>
