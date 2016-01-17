@@ -17,23 +17,9 @@
       <guid>http://eliquious.github.io/post/writing-a-database-part-1/</guid>
       <description>
 
-&lt;p&gt;Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations. But obviously it depends on what it is you are building&amp;hellip;&lt;/p&gt;
+&lt;p&gt;Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations.&lt;/p&gt;
 
-&lt;h5 id=&#34;in-this-series:b74c517924e3e9b7d099e040e9ec53c5&#34;&gt;In this series&amp;hellip;&lt;/h5&gt;
-
-&lt;ol&gt;
-&lt;li&gt;&lt;a href=&#34;http://eliquious.github.io/post/writing-a-database-part-1/&#34; title=&#34;Part 1&#34;&gt;Data model and query language&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;Lexing, Parsing and the AST&lt;/li&gt;
-&lt;li&gt;Query Execution&lt;/li&gt;
-&lt;li&gt;Database server&lt;/li&gt;
-&lt;li&gt;Database client&lt;/li&gt;
-&lt;li&gt;Benchmarks&lt;/li&gt;
-&lt;li&gt;Performance enhancements&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;So what are we building? We&amp;rsquo;re going to build another key-value database. However, this one is going to be geared specifically for range scans and is called &lt;a href=&#34;http://github.com/eliquious/prefixdb/&#34; title=&#34;PrefixDB on GitHub&#34;&gt;PrefixDB&lt;/a&gt;. So where should we start? We should start by defining the data model and then the query language.&lt;/p&gt;
-
-&lt;p&gt;&lt;/br&gt;&lt;/p&gt;
+&lt;p&gt;So what kind of database are we building? We&amp;rsquo;re going to build yet another key-value database. However, this one is going to be geared specifically for range scans and is called &lt;a href=&#34;http://github.com/eliquious/prefixdb/&#34; title=&#34;PrefixDB on GitHub&#34;&gt;PrefixDB&lt;/a&gt;. So where should we start? We should start by defining the data model and then the query language.&lt;/p&gt;
 
 &lt;h3 id=&#34;defining-the-data-model:b74c517924e3e9b7d099e040e9ec53c5&#34;&gt;Defining the data model&lt;/h3&gt;
 

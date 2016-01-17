@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Squirrels</title>
-    <link>http://eliquious.github.io/</link>
-    <description>Recent content on Squirrels</description>
+    <title>Databases on Squirrels</title>
+    <link>http://eliquious.github.io/tags/databases/</link>
+    <description>Recent content in Databases on Squirrels</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <lastBuildDate>Sat, 16 Jan 2016 00:21:42 -0600</lastBuildDate>
-    <atom:link href="http://eliquious.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://eliquious.github.io/tags/databases/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
       <title>Writing a database in Go: Part 1</title>

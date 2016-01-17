@@ -7,7 +7,7 @@
     <head>
                 <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="description" content="">
+        <meta name="description" content="The data model and query language">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -47,28 +47,15 @@
 		<article class="post">
 	<header class="post-header">
         <h2 class="p-post-title">Writing a database in Go: Part 1</h2>
+        <p class="blog-description">The data model and query language</p>
     </header>
 
     <section class="post-content">
         
 
-<p>Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations. But obviously it depends on what it is you are building&hellip;</p>
+<p>Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations.</p>
 
-<h5 id="in-this-series:b74c517924e3e9b7d099e040e9ec53c5">In this series&hellip;</h5>
-
-<ol>
-<li><a href="http://eliquious.github.io/post/writing-a-database-part-1/" title="Part 1">Data model and query language</a></li>
-<li>Lexing, Parsing and the AST</li>
-<li>Query Execution</li>
-<li>Database server</li>
-<li>Database client</li>
-<li>Benchmarks</li>
-<li>Performance enhancements</li>
-</ol>
-
-<p>So what are we building? We&rsquo;re going to build another key-value database. However, this one is going to be geared specifically for range scans and is called <a href="http://github.com/eliquious/prefixdb/" title="PrefixDB on GitHub">PrefixDB</a>. So where should we start? We should start by defining the data model and then the query language.</p>
-
-<p></br></p>
+<p>So what kind of database are we building? We&rsquo;re going to build yet another key-value database. However, this one is going to be geared specifically for range scans and is called <a href="http://github.com/eliquious/prefixdb/" title="PrefixDB on GitHub">PrefixDB</a>. So where should we start? We should start by defining the data model and then the query language.</p>
 
 <h3 id="defining-the-data-model:b74c517924e3e9b7d099e040e9ec53c5">Defining the data model</h3>
 
@@ -206,6 +193,10 @@ CREATE KEYSPACE users.settings WITH KEYS username, setting
                 </span>
             </section>
 
+            
+            	<span class="f-post-tags"><i class="fa fa-tag"></i>
+            	Go, Databases
+            	</span>
             
         </section>
                 
