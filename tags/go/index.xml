@@ -124,7 +124,7 @@ CREATE KEYSPACE users.settings WITH KEYS username, setting
 
 &lt;p&gt;Obviously, this is just the start. Next time we&amp;rsquo;ll get into code.&lt;/p&gt;
 
-&lt;p&gt;But with only 5 query statements we have quite a bit of functionality. Statements that could be added in the future are &lt;code&gt;DESCRIBE&lt;/code&gt; (for describing keyspaces) and &lt;code&gt;BATCH&lt;/code&gt; (for large inserts).&lt;/p&gt;
+&lt;p&gt;Even with only 5 query statements we have quite a bit of functionality. Statements that could be added in the future are &lt;code&gt;DESCRIBE&lt;/code&gt; (for describing keyspaces) and &lt;code&gt;BATCH&lt;/code&gt; (for large inserts).&lt;/p&gt;
 
 &lt;p&gt;There are also a few extra clauses that may be beneficial in the short term. Such as &lt;code&gt;LIMIT&lt;/code&gt; and possibly &lt;code&gt;ORDER BY&lt;/code&gt;, although &lt;code&gt;ORDER BY&lt;/code&gt; might be limited as well for efficiency.&lt;/p&gt;
 </description>
