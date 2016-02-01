@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]><html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]><html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]><html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--><html class="no-js" prefix="og: http://ogp.me/ns#" xmlns:og="http://ogp.me/ns#"><!--<![endif]-->
+
+    <head>
+                <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="description" content="Parsing">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black">
+        <meta name="author" content="">
+        <meta name="keywords" content="awesome, definitely">
+	
+        <meta name="twitter:card" content="summary">
+        <meta name="twitter:site" content="@https://twitter.com/eliquious">
+        <meta name="twitter:creator" content="@https://twitter.com/eliquious">
+        <meta name="twitter:domain" content="http://eliquious.github.io/">
+	
+        <meta property="og:site_name" content="Squirrels">
+        <meta property="og:title" content="Squirrels">
+        <meta property="og:url" content="http://eliquious.github.io/post/writing-a-database-part-3/">
+        <meta property="og:description" content="Chasing them one day at a time">
+    
+        <meta property="og:type" content="article" />
+        <meta property="og:article:author" content="" />
+        <meta property="og:article:published_time" content="2016-01-31T20:18:01-06:00" />
+    
+        <meta name="generator" content="Hugo 0.16-DEV" />
+        <title>Writing a database in Go: Part 3 &middot; Squirrels </title>
+        <link rel="canonical" href="http://eliquious.github.io/" />
+        <link rel="alternate" type="application/rss+xml" title="RSS" href="">
+        <link rel="stylesheet" type='text/css' href="http://eliquious.github.io/css/main.css"/>
+        <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:300|Montserrat:700' rel='stylesheet' type='text/css'>
+        <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+        <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+    </head>
+<body>
+<!--[if lt IE 7]><p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chrome/‎">install Google Chrome</a> to experience this site.</p><![endif]-->
+
+    <header id="site-header">
+        <div>
+            <img class="avatar" src="https://s.gravatar.com/avatar/bc02d63efa6e4af9c2f1a217d15d8419?s=80" alt="avatar" />
+        </div>
+        <div class="container">
+            <a href="http://eliquious.github.io/" alt="Squirrels"><h1 class="blog-title heading">Squirrels</h1></a>
+            <p class="blog-description">Chasing them one day at a time</p>
+        </div>
+        <div>
+            <a class="icon-github" href="http://github.com/eliquious">
+                <i class="fa fa-github"></i>
+            </a>
+        </div>
+    </header>
+<main class="content" role="main">
+	<div class="container">
+		<article class="post">
+	<header class="post-header">
+        <h2 class="p-post-title">Writing a database in Go: Part 3</h2>
+        <p class="blog-description">Parsing</p>
+    </header>
+
+    <section class="post-content">
+        
+
+<p><br/></p>
+
+<p>This is a continuation of the <a href="https://eliquious.github.io/post/writing-a-database-part-2/" title="Part 2: Lexing a query language">second part</a> of this series where we discussed lexing the query language for this new database. In this third part we will write our parser.</p>
+
+<h3 id="parsing:adc9367f9fa0516fa308d9b9c785dca8">Parsing</h3>
+
+<p>We start by defining the <code>Parser</code>. A parser takes the tokens produced by the lexer and creates AST nodes which can then be used by a query executor.</p>
+
+<p>For PrefixDB, our parser is  a simple struct with a <code>TokenBuffer</code>. We can also define a few helper methods to start with as well. We can create a new <code>Parser</code> from an <code>io.Reader</code> or from a string. After the parser has been created we use the <code>ParseStatement</code> function to initiate the parsing. It also reads the first token and delegates which specific parsing function to use for this query.</p>
+
+<p>The <code>parseString</code> and <code>parseIndent</code> functions validate the next token as either a string or an identifier. The <code>scan</code>, <code>unscan</code>, <code>peekRune</code> and <code>scanIgnoreWhitespace</code> methods help manage the token buffer such as advancing the parser to the next token, etc..</p>
+
+<pre><code>package parser
+
+import (
+    &quot;io&quot;
+    &quot;strings&quot;
+
+    &quot;github.com/eliquious/lexer&quot;
+    tokens &quot;github.com/eliquious/prefixdb/lexer&quot;
+)
+
+// Parser represents an PrefixDB parser.
+type Parser struct {
+    s *lexer.TokenBuffer
+}
+
+// NewParser returns a new instance of Parser.
+func NewParser(r io.Reader) *Parser {
+    return &amp;Parser{s: lexer.NewTokenBuffer(r)}
+}
+
+// ParseString parses a statement string and returns its AST representation.
+func ParseString(s string) (Node, error) {
+    return NewParser(strings.NewReader(s)).ParseStatement()
+}
+
+// ParseStatement parses a string and returns a Node AST object.
+func (p *Parser) ParseStatement() (Node, error) {
+
+    // Inspect the first token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.CREATE:
+        return p.parseCreateStatement()
+    case tokens.DROP:
+        return p.parseDropStatement()
+    case tokens.SELECT:
+        return p.parseSelectStatement()
+    case tokens.DELETE:
+        return p.parseDeleteStatement()
+    case tokens.UPSERT:
+        return p.parseUpsertStatement()
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;CREATE&quot;, &quot;DROP&quot;, &quot;SELECT&quot;, &quot;DELETE&quot;, &quot;UPSERT&quot;}, pos)
+    }
+}
+
+// parserString parses a string.
+func (p *Parser) parseString() (string, error) {
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.STRING {
+        return &quot;&quot;, NewParseError(tokstr(tok, lit), []string{&quot;string&quot;}, pos)
+    }
+    return lit, nil
+}
+
+// parseIdent parses an identifier.
+func (p *Parser) parseIdent() (string, error) {
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        p.unscan()
+        return &quot;&quot;, NewParseError(tokstr(tok, lit), []string{&quot;identifier&quot;}, pos)
+    }
+    return lit, nil
+}
+
+// scan returns the next token from the underlying scanner.
+func (p *Parser) scan() (tok lexer.Token, pos lexer.Pos, lit string) { return p.s.Scan() }
+
+// unscan pushes the previously read token back onto the buffer.
+func (p *Parser) unscan() { p.s.Unscan() }
+
+// peekRune returns the next rune that would be read by the scanner.
+func (p *Parser) peekRune() rune { return p.s.Peek() }
+
+// scanIgnoreWhitespace scans the next non-whitespace token.
+func (p *Parser) scanIgnoreWhitespace() (tok lexer.Token, pos lexer.Pos, lit string) {
+    tok, pos, lit = p.scan()
+    if tok == lexer.WS {
+        tok, pos, lit = p.scan()
+    }
+    return
+}
+
+// tokstr returns a string based on the token provided
+func tokstr(tok lexer.Token, lit string) string {
+    if tok == lexer.IDENT {
+        return &quot;IDENTIFIER (&quot; + lit + &quot;)&quot;
+    }
+    return tok.String()
+}
+
+</code></pre>
+
+<p>That&rsquo;s all we need to start writing the specific query types. Now that we have a parser we can now define the AST node interface. The <code>Node</code> interface is common for all queries.</p>
+
+<pre><code>type Node interface {
+    NodeType() NodeType
+    String() string
+}
+</code></pre>
+
+<p>The interface provides a way to get a node&rsquo;s type as well as a method for printing the query. The <code>NodeType</code> is a simply enum and defined like so:</p>
+
+<pre><code>type NodeType int
+
+const (
+    CreateKeyspaceType NodeType = iota
+    DropKeyspaceType
+    SelectType
+    UpsertType
+    DeleteType
+    StringLiteralType
+    StringLiteralGroupType
+    ExpressionType
+    KeyAttributeType
+    BetweenType
+)
+</code></pre>
+
+<p>The AST ndoes are simple structs which fulfill the <code>Node</code> interface. Let&rsquo;s start with the <code>CREATE</code> query.</p>
+
+<h4 id="create-keyspace:adc9367f9fa0516fa308d9b9c785dca8">CREATE KEYSPACE</h4>
+
+<p>If you remember from the first part of this series, a <code>CREATE KEYSPACE</code> query might look something like this: <code>CREATE KEYSPACE users WITH KEYS username</code>.</p>
+
+<p>In order to represent that query in a struct we need to store the keyspace name as well as the keys. It might look something like this:</p>
+
+<pre><code>type CreateStatement struct {
+    Keyspace string
+    Keys     []string
+}
+
+func (CreateStatement) NodeType() NodeType {
+    return CreateKeyspaceType
+}
+</code></pre>
+
+<p>The struct also needs the <code>String()</code> method to fully implement the Node interface, but it simply recreates the query string from the struct.</p>
+
+<p>Now that we have an AST node we can parse the query. In order to fully parse the <code>CREATE</code> statement we need to define four new methods. First we need to define the top level method for the query. It inspecs the first token after the <code>CREATE</code> keyword, which should be <code>KEYSPACE</code>.</p>
+
+<p>If <code>KEYSPACE</code> is found it will continue parsing the query.</p>
+
+<pre><code>// parseCreateStatement parses a string and returns an AST object.
+// This function assumes the &quot;CREATE&quot; token has already been consumed.
+func (p *Parser) parseCreateStatement() (Node, error) {
+
+    // Inspect the first token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.KEYSPACE:
+        return p.parseCreateKeyspaceStatement()
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;KEYSPACE&quot;}, pos)
+    }
+}
+</code></pre>
+
+<p>After the keywords have been consumed, we need the read the name of the keyspace and keys. Once the keyspace name is determined, we verify the <code>WITH KEY(S)</code> keywords, then the name of the keys.</p>
+
+<pre><code>// parseCreateKeyspaceStatement parses a string and returns a CreateKeyspaceStatement.
+// This function assumes the &quot;CREATE&quot; token has already been consumed.
+func (p *Parser) parseCreateKeyspaceStatement() (*CreateStatement, error) {
+    stmt := &amp;CreateStatement{}
+
+    // Parse the name of the keyspace to be used
+    lit, err := p.parseKeyspace()
+    if err != nil {
+        return nil, err
+    }
+    stmt.Keyspace = lit
+
+    // Inspect the WITH token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.WITH:
+
+        // Inspect the KEY or KEYS token.
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case tokens.KEY:
+            k, err := p.parseIdent()
+            if err != nil {
+                return nil, err
+            } else {
+                stmt.Keys = append(stmt.Keys, k)
+            }
+        case tokens.KEYS:
+            k, err := p.parseIdentList()
+            if err != nil {
+                return nil, err
+            } else {
+                stmt.Keys = k
+            }
+        default:
+            return nil, NewParseError(tokstr(tok, lit), []string{&quot;KEY&quot;, &quot;KEYS&quot;}, pos)
+        }
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;WITH&quot;}, pos)
+    }
+
+    // Verify end of query
+    tok, pos, lit = p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.EOF:
+    case lexer.SEMICOLON:
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;EOF&quot;, &quot;SEMICOLON&quot;}, pos)
+    }
+
+    return stmt, nil
+}
+</code></pre>
+
+<p>To parse the name of the keyspace we need a new method:</p>
+
+<pre><code>// parseKeyspace returns a keyspace title or an error
+func (p *Parser) parseKeyspace() (string, error) {
+    var keyspace string
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return &quot;&quot;, NewParseError(tokstr(tok, lit), []string{&quot;keyspace&quot;}, pos)
+    }
+    keyspace = lit
+
+    // Scan entire keyspace
+    // Keyspaces are a period delimited list of identifiers
+    var endPeriod bool
+    for {
+        tok, pos, lit = p.scan()
+        if tok == lexer.DOT {
+            keyspace += &quot;.&quot;
+            endPeriod = true
+        } else if tok == lexer.IDENT {
+            keyspace += lit
+            endPeriod = false
+        } else {
+            break
+        }
+    }
+
+    // remove last token
+    p.unscan()
+
+    // Keyspaces can't end on a period
+    if endPeriod {
+        return &quot;&quot;, NewParseError(tokstr(tok, lit), []string{&quot;identifier&quot;}, pos)
+    }
+    return keyspace, nil
+}
+</code></pre>
+
+<p>Keyspace names can be a single identifier, or several identifiers divided by a period. Identifiers can also have underscores but not spaces.</p>
+
+<p>To wrap up the <code>CREATE</code> statement we need a method to parse a list of key names for the keyspace. Keys are identifiers that are optionally separated by a comma.</p>
+
+<pre><code>// parseIdentList returns a list of attributes or an error
+func (p *Parser) parseIdentList() ([]string, error) {
+    var keys []string
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return keys, NewParseError(tokstr(tok, lit), []string{&quot;identifier&quot;}, pos)
+    }
+    keys = append(keys, lit)
+
+    // Scan entire list
+    // Key lists are comma delimited
+    for {
+        tok, pos, lit = p.scanIgnoreWhitespace()
+        if tok == lexer.EOF {
+            break
+        } else if tok != lexer.COMMA {
+            return keys, NewParseError(tokstr(tok, lit), []string{&quot;COMMA&quot;, &quot;EOF&quot;}, pos)
+        }
+
+        k, err := p.parseIdent()
+        if err != nil {t
+            return keys, err
+        }
+        keys = append(keys, k)
+    }
+
+    // remove last token
+    p.unscan()
+
+    return keys, nil
+}
+</code></pre>
+
+<p>That&rsquo;s all we need to parse the <code>CREATE</code> statement. The <code>DROP</code> statement is very similar to <code>CREATE</code> except for the list of keys so we&rsquo;re going to skip it. You can always find it in the repo if you want to see it.</p>
+
+<h4 id="select:adc9367f9fa0516fa308d9b9c785dca8">SELECT</h4>
+
+<p>The <code>SELECT</code> statement is perhaps the most difficult to parse so we&rsquo;ll do it next. The select query looks fairly simple but parsing the <code>WHERE</code> clause might cause you greif. A sample query might look like this:</p>
+
+<p><code>SELECT FROM users.settings WHERE user = &quot;eliquious&quot; AND setting = &quot;email&quot;;</code></p>
+
+<p>There are 2 main parts to the select query: the keyspace and the where clause. So our AST node looks like this.</p>
+
+<pre><code>type SelectStatement struct {
+    Keyspace string
+    Where    []Expression
+}
+</code></pre>
+
+<p>We can start parsing the query by defining the top level function.</p>
+
+<pre><code>// parseSelectStatement parses a string and returns an AST object.
+// This function assumes the &quot;SELECT&quot; token has already been consumed.
+func (p *Parser) parseSelectStatement() (Node, error) {
+
+    ks, where, err := p.parseFromWhere()
+    if err != nil {
+        return nil, err
+    }
+
+    return &amp;SelectStatement{
+        Keyspace: ks,
+        Where:    where,
+    }, nil
+}
+</code></pre>
+
+<p>After the <code>SELECT</code> keyword we have <code>FROM</code> and then the keyspace name. After the keyspace name, we can parse the <code>WHERE</code> clause.</p>
+
+<pre><code>func (p *Parser) parseFromWhere() (string, []Expression, error) {
+    var keyspace string
+    var exprs []Expression
+
+    // Inspect the FROM token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.FROM:
+
+        // Parse the name of the keyspace to be used
+        lit, err := p.parseKeyspace()
+        if err != nil {
+            return &quot;&quot;, nil, err
+        }
+        keyspace = lit
+
+        // Inspect the WHERE token.
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case tokens.WHERE:
+
+            // Parse the WHERE clause
+            exp, err := p.parseWhereClause(true, true)
+            if err != nil {
+                return &quot;&quot;, nil, err
+            }
+            exprs = exp
+
+        default:
+            return &quot;&quot;, nil, NewParseError(tokstr(tok, lit), []string{&quot;WHERE&quot;}, pos)
+        }
+
+    default:
+        return &quot;&quot;, nil, NewParseError(tokstr(tok, lit), []string{&quot;FROM&quot;}, pos)
+    }
+    return keyspace, exprs, nil
+}
+</code></pre>
+
+<p>Parsing the <code>WHERE</code> is interesting and because the <code>UPSERT</code>, <code>DELETE</code> and <code>SELECT</code> queries all have similar clauses, we can reuse this method. The <code>UPSERT</code> query does not make use of <code>BETWEEN</code> or a logical <code>OR</code> so we can disable them by arguments.</p>
+
+<pre><code>// parseWhereClause parses a string and returns an AST object.
+// This function assumes the &quot;WHERE&quot; token has already been consumed.
+func (p *Parser) parseWhereClause(allowBetween bool, allowLogicalOR bool) ([]Expression, error) {
+    var expr []Expression
+
+    // Read expression
+    exp, err := p.parseExpression(allowBetween, allowLogicalOR)
+    if err != nil {
+        return expr, err
+    }
+    expr = append(expr, exp)
+
+OUTER:
+    for {
+
+        // Test if there is another expression
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case lexer.EOF, lexer.SEMICOLON:
+            break OUTER
+        case lexer.AND:
+
+            exp, err := p.parseExpression(allowBetween, allowLogicalOR)
+            if err != nil {
+                return expr, err
+            }
+            expr = append(expr, exp)
+
+        default:
+            return nil, NewParseError(tokstr(tok, lit), []string{&quot;EOF&quot;, &quot;SEMICOLON&quot;, &quot;AND&quot;}, pos)
+        }
+    }
+    return expr, nil
+}
+</code></pre>
+
+<p>The allowed conditions are not as full featured as a traditional relational database due to the decisions made when creating the data model. Each expression is <code>AND</code>d with the next. The only place an <code>OR</code> is allowed is inside the equality operator (<code>attr = &quot;name2&quot; OR &quot;name2&quot;</code>).</p>
+
+<p>There are only 2 real types of expression operators: the equality and between operators. We can decide which expression is next via the following method. First we parse the key name, then the operator and values.</p>
+
+<pre><code>// parseExpression parses a string and returns an AST object.
+func (p *Parser) parseExpression(allowBetween, allowLogicalOR bool) (Expression, error) {
+
+    // Inspect the FROM token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;identifier&quot;}, pos)
+    }
+    ident := lit
+
+    // Inspect the operator token.
+    tok, pos, lit = p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.EQ:
+        expr, err := p.parseEqualityExpression(ident, allowLogicalOR)
+        if err != nil {
+            return nil, err
+        }
+        return expr, nil
+    case tokens.BETWEEN:
+        if !allowBetween {
+            return nil, &amp;ParseError{Message: &quot;BETWEEN not allowed&quot;, Pos: pos}
+        }
+
+        expr, err := p.parseBetweenExpression(ident)
+        if err != nil {
+            return nil, err
+        }
+        return expr, nil
+    default:
+        if allowBetween {
+            return nil, NewParseError(tokstr(tok, lit), []string{&quot;EQ&quot;, &quot;BETWEEN&quot;}, pos)
+        }
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;EQ&quot;}, pos)
+    }
+}
+</code></pre>
+
+<p>To parse the equality expression we define the method below. As mentioned above the equality operator can have 2 values. If after the first value, there can be an <code>AND</code> or an <code>OR</code> keyword.</p>
+
+<pre><code>// EqualityExpression represents a filter condition which filters based on an exact match.
+type EqualityExpression struct {
+    KeyAttribute string
+    Value        Node
+}
+
+...
+
+// parseEqualityExpression parses a string and returns an AST object.
+func (p *Parser) parseEqualityExpression(ident string, allowLogicalOR bool) (Expression, error) {
+    // expr := &amp;EqualityExpression{KeyAttribute: ident}
+    // var expr Expression
+
+    // Parse the string value
+    value, err := p.parseString()
+    if err != nil {
+        return nil, err
+    }
+
+    // Inspect the AND / OR token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.AND, lexer.EOF:
+        p.unscan()
+        return EqualityExpression{KeyAttribute: ident, Value: StringLiteral{value}}, nil
+    case lexer.OR:
+        // Upserts cannot contain OR equality clauses.
+        if !allowLogicalOR {
+            return nil, &amp;ParseError{Message: &quot;OR not allowed&quot;, Pos: pos}
+        }
+
+        values := []string{value}
+
+        // Parse the string value
+        value, err := p.parseString()
+        if err != nil {
+            return nil, err
+        }
+        values = append(values, value)
+        return EqualityExpression{KeyAttribute: ident, Value: StringLiteralGroup{Operator: OrOperator, Values: values}}, nil
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;AND&quot;, &quot;OR&quot;}, pos)
+    }
+}
+
+// BetweenExpression represents a filter condition which filters keys between 2 given strings.
+type BetweenExpression struct {
+    KeyAttribute string
+    Values       StringLiteralGroup
+}
+
+...
+
+// parseBetweenExpression parses a string and returns an AST object.
+func (p *Parser) parseBetweenExpression(ident string) (Expression, error) {
+    expr := BetweenExpression{KeyAttribute: ident}
+
+    // Parse the string value
+    value, err := p.parseString()
+    if err != nil {
+        return nil, err
+    }
+
+    // Inspect the AND / OR token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.AND:
+        values := []string{value}
+
+        // Parse the string value
+        value, err := p.parseString()
+        if err != nil {
+            return nil, err
+        }
+        values = append(values, value)
+        expr.Values = StringLiteralGroup{Operator: AndOperator, Values: values}
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&quot;AND&quot;}, pos)
+    }
+    return expr, nil
+}
+</code></pre>
+
+<h4 id="errors:adc9367f9fa0516fa308d9b9c785dca8">Errors</h4>
+
+<p>One thing I have left out, besides the other queries, is how errors are handled. I&rsquo;ve defined a single error type for all parse errors which is called ironically a <code>ParseError</code>. It is fairly straight forward as it will return a string whieh shows the current token vs. what was expected.</p>
+
+<pre><code>// ParseError represents an error that occurred during parsing.
+type ParseError struct {
+    Message  string
+    Found    string
+    Expected []string
+    Pos      lexer.Pos
+}
+
+// newParseError returns a new instance of ParseError.
+func NewParseError(found string, expected []string, pos lexer.Pos) *ParseError {
+    return &amp;ParseError{Found: found, Expected: expected, Pos: pos}
+}
+
+// Error returns the string representation of the error.
+func (e *ParseError) Error() string {
+    if e.Message != &quot;&quot; {
+        return fmt.Sprintf(&quot;%s at line %d, char %d&quot;, e.Message, e.Pos.Line+1, e.Pos.Char+1)
+    }
+    return fmt.Sprintf(&quot;found %s, expected %s at line %d, char %d&quot;, e.Found, strings.Join(e.Expected, &quot;, &quot;), e.Pos.Line+1, e.Pos.Char+1)
+}
+</code></pre>
+
+<h3 id="conclusion:adc9367f9fa0516fa308d9b9c785dca8">Conclusion</h3>
+
+<p>This turned out the be a very long post despite not including all of the query types. However, the additional queries use the same techniques and helper methods as the <code>CREATE</code> and <code>SELECT</code> statements. If you want to checkout the rest of the parser as well as how to test one, you can find the code in the <a href="http://github.com/eliquious/prefixdb/" title="PrefixDB on GitHub">repo</a>.</p>
+
+    </section>
+
+    <hr>
+
+    <footer class="post-footer">
+        <section class="f-1">
+            
+
+            <p class="f-post-time"><time datetime="2016-01-31T20:18:01-06:00">January 31, 2016</time></p>
+        </section>
+
+        <section class="f-2">
+            <section class="share">
+                <span>Share:
+                <a class="icon-twitter" href="http://twitter.com/share?text=Writing%20a%20database%20in%20Go%3a%20Part%203&url=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-3%2f"
+                    onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                    <i class="fa fa-twitter"></i>
+                </a>
+                <a class="icon-facebook" href="https://www.facebook.com/sharer/sharer.php?u=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-3%2f"
+                    onclick="window.open(this.href, 'facebook-share','width=580,height=296');return false;">
+                    <i class="fa fa-facebook"></i>
+                </a>
+                <a class="icon-google-plus" href="https://plus.google.com/share?url=http%3a%2f%2feliquious.github.io%2fpost%2fwriting-a-database-part-3%2f"
+                   onclick="window.open(this.href, 'google-plus-share', 'width=490,height=530');return false;">
+                    <i class="fa fa-google-plus"></i>
+                </a>
+                </span>
+            </section>
+
+            
+            	<span class="f-post-tags"><i class="fa fa-tag"></i>
+            	Go, Databases, Parsing
+            	</span>
+            
+        </section>
+                
+    </footer>
+</article>
+	</div>
+</main>
+    <footer id="site-footer">
+        <div class="container">
+            <a href="http://eliquious.github.io/index.xml" title="Get the RSS feed"><span class="tooltip"><i class="fa fa-rss"></i></span></a>
+            <section>&copy; <a href="http://eliquious.github.io/"></a> 2015 | All rights reserved</section>
+            <section>Theme by <a href="http://www.jrdnbwmn.com">Jordan Bowman</a>. Generated with <a href="http://gohugo.io/">Hugo</a>.</section>
+        </div>
+    </footer>
+
+    <script type="text/javascript" src="http://eliquious.github.io/js/fittext.js"></script>
+    <script type="text/javascript">
+      $(".heading").fitText();
+    </script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-72521068-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+</body>
+</html>

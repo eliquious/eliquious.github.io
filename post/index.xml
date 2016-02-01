@@ -6,8 +6,589 @@
     <description>Recent content in Posts on Squirrels</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 16 Jan 2016 20:02:44 -0600</lastBuildDate>
+    <lastBuildDate>Sun, 31 Jan 2016 20:18:01 -0600</lastBuildDate>
     <atom:link href="http://eliquious.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Writing a database in Go: Part 3</title>
+      <link>http://eliquious.github.io/post/writing-a-database-part-3/</link>
+      <pubDate>Sun, 31 Jan 2016 20:18:01 -0600</pubDate>
+      
+      <guid>http://eliquious.github.io/post/writing-a-database-part-3/</guid>
+      <description>
+
+&lt;p&gt;&lt;br/&gt;&lt;/p&gt;
+
+&lt;p&gt;This is a continuation of the &lt;a href=&#34;https://eliquious.github.io/post/writing-a-database-part-2/&#34; title=&#34;Part 2: Lexing a query language&#34;&gt;second part&lt;/a&gt; of this series where we discussed lexing the query language for this new database. In this third part we will write our parser.&lt;/p&gt;
+
+&lt;h3 id=&#34;parsing:adc9367f9fa0516fa308d9b9c785dca8&#34;&gt;Parsing&lt;/h3&gt;
+
+&lt;p&gt;We start by defining the &lt;code&gt;Parser&lt;/code&gt;. A parser takes the tokens produced by the lexer and creates AST nodes which can then be used by a query executor.&lt;/p&gt;
+
+&lt;p&gt;For PrefixDB, our parser is  a simple struct with a &lt;code&gt;TokenBuffer&lt;/code&gt;. We can also define a few helper methods to start with as well. We can create a new &lt;code&gt;Parser&lt;/code&gt; from an &lt;code&gt;io.Reader&lt;/code&gt; or from a string. After the parser has been created we use the &lt;code&gt;ParseStatement&lt;/code&gt; function to initiate the parsing. It also reads the first token and delegates which specific parsing function to use for this query.&lt;/p&gt;
+
+&lt;p&gt;The &lt;code&gt;parseString&lt;/code&gt; and &lt;code&gt;parseIndent&lt;/code&gt; functions validate the next token as either a string or an identifier. The &lt;code&gt;scan&lt;/code&gt;, &lt;code&gt;unscan&lt;/code&gt;, &lt;code&gt;peekRune&lt;/code&gt; and &lt;code&gt;scanIgnoreWhitespace&lt;/code&gt; methods help manage the token buffer such as advancing the parser to the next token, etc..&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package parser
+
+import (
+    &amp;quot;io&amp;quot;
+    &amp;quot;strings&amp;quot;
+
+    &amp;quot;github.com/eliquious/lexer&amp;quot;
+    tokens &amp;quot;github.com/eliquious/prefixdb/lexer&amp;quot;
+)
+
+// Parser represents an PrefixDB parser.
+type Parser struct {
+    s *lexer.TokenBuffer
+}
+
+// NewParser returns a new instance of Parser.
+func NewParser(r io.Reader) *Parser {
+    return &amp;amp;Parser{s: lexer.NewTokenBuffer(r)}
+}
+
+// ParseString parses a statement string and returns its AST representation.
+func ParseString(s string) (Node, error) {
+    return NewParser(strings.NewReader(s)).ParseStatement()
+}
+
+// ParseStatement parses a string and returns a Node AST object.
+func (p *Parser) ParseStatement() (Node, error) {
+
+    // Inspect the first token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.CREATE:
+        return p.parseCreateStatement()
+    case tokens.DROP:
+        return p.parseDropStatement()
+    case tokens.SELECT:
+        return p.parseSelectStatement()
+    case tokens.DELETE:
+        return p.parseDeleteStatement()
+    case tokens.UPSERT:
+        return p.parseUpsertStatement()
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;CREATE&amp;quot;, &amp;quot;DROP&amp;quot;, &amp;quot;SELECT&amp;quot;, &amp;quot;DELETE&amp;quot;, &amp;quot;UPSERT&amp;quot;}, pos)
+    }
+}
+
+// parserString parses a string.
+func (p *Parser) parseString() (string, error) {
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.STRING {
+        return &amp;quot;&amp;quot;, NewParseError(tokstr(tok, lit), []string{&amp;quot;string&amp;quot;}, pos)
+    }
+    return lit, nil
+}
+
+// parseIdent parses an identifier.
+func (p *Parser) parseIdent() (string, error) {
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        p.unscan()
+        return &amp;quot;&amp;quot;, NewParseError(tokstr(tok, lit), []string{&amp;quot;identifier&amp;quot;}, pos)
+    }
+    return lit, nil
+}
+
+// scan returns the next token from the underlying scanner.
+func (p *Parser) scan() (tok lexer.Token, pos lexer.Pos, lit string) { return p.s.Scan() }
+
+// unscan pushes the previously read token back onto the buffer.
+func (p *Parser) unscan() { p.s.Unscan() }
+
+// peekRune returns the next rune that would be read by the scanner.
+func (p *Parser) peekRune() rune { return p.s.Peek() }
+
+// scanIgnoreWhitespace scans the next non-whitespace token.
+func (p *Parser) scanIgnoreWhitespace() (tok lexer.Token, pos lexer.Pos, lit string) {
+    tok, pos, lit = p.scan()
+    if tok == lexer.WS {
+        tok, pos, lit = p.scan()
+    }
+    return
+}
+
+// tokstr returns a string based on the token provided
+func tokstr(tok lexer.Token, lit string) string {
+    if tok == lexer.IDENT {
+        return &amp;quot;IDENTIFIER (&amp;quot; + lit + &amp;quot;)&amp;quot;
+    }
+    return tok.String()
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;That&amp;rsquo;s all we need to start writing the specific query types. Now that we have a parser we can now define the AST node interface. The &lt;code&gt;Node&lt;/code&gt; interface is common for all queries.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Node interface {
+    NodeType() NodeType
+    String() string
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The interface provides a way to get a node&amp;rsquo;s type as well as a method for printing the query. The &lt;code&gt;NodeType&lt;/code&gt; is a simply enum and defined like so:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type NodeType int
+
+const (
+    CreateKeyspaceType NodeType = iota
+    DropKeyspaceType
+    SelectType
+    UpsertType
+    DeleteType
+    StringLiteralType
+    StringLiteralGroupType
+    ExpressionType
+    KeyAttributeType
+    BetweenType
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The AST ndoes are simple structs which fulfill the &lt;code&gt;Node&lt;/code&gt; interface. Let&amp;rsquo;s start with the &lt;code&gt;CREATE&lt;/code&gt; query.&lt;/p&gt;
+
+&lt;h4 id=&#34;create-keyspace:adc9367f9fa0516fa308d9b9c785dca8&#34;&gt;CREATE KEYSPACE&lt;/h4&gt;
+
+&lt;p&gt;If you remember from the first part of this series, a &lt;code&gt;CREATE KEYSPACE&lt;/code&gt; query might look something like this: &lt;code&gt;CREATE KEYSPACE users WITH KEYS username&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;In order to represent that query in a struct we need to store the keyspace name as well as the keys. It might look something like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type CreateStatement struct {
+    Keyspace string
+    Keys     []string
+}
+
+func (CreateStatement) NodeType() NodeType {
+    return CreateKeyspaceType
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The struct also needs the &lt;code&gt;String()&lt;/code&gt; method to fully implement the Node interface, but it simply recreates the query string from the struct.&lt;/p&gt;
+
+&lt;p&gt;Now that we have an AST node we can parse the query. In order to fully parse the &lt;code&gt;CREATE&lt;/code&gt; statement we need to define four new methods. First we need to define the top level method for the query. It inspecs the first token after the &lt;code&gt;CREATE&lt;/code&gt; keyword, which should be &lt;code&gt;KEYSPACE&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;If &lt;code&gt;KEYSPACE&lt;/code&gt; is found it will continue parsing the query.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseCreateStatement parses a string and returns an AST object.
+// This function assumes the &amp;quot;CREATE&amp;quot; token has already been consumed.
+func (p *Parser) parseCreateStatement() (Node, error) {
+
+    // Inspect the first token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.KEYSPACE:
+        return p.parseCreateKeyspaceStatement()
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;KEYSPACE&amp;quot;}, pos)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;After the keywords have been consumed, we need the read the name of the keyspace and keys. Once the keyspace name is determined, we verify the &lt;code&gt;WITH KEY(S)&lt;/code&gt; keywords, then the name of the keys.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseCreateKeyspaceStatement parses a string and returns a CreateKeyspaceStatement.
+// This function assumes the &amp;quot;CREATE&amp;quot; token has already been consumed.
+func (p *Parser) parseCreateKeyspaceStatement() (*CreateStatement, error) {
+    stmt := &amp;amp;CreateStatement{}
+
+    // Parse the name of the keyspace to be used
+    lit, err := p.parseKeyspace()
+    if err != nil {
+        return nil, err
+    }
+    stmt.Keyspace = lit
+
+    // Inspect the WITH token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.WITH:
+
+        // Inspect the KEY or KEYS token.
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case tokens.KEY:
+            k, err := p.parseIdent()
+            if err != nil {
+                return nil, err
+            } else {
+                stmt.Keys = append(stmt.Keys, k)
+            }
+        case tokens.KEYS:
+            k, err := p.parseIdentList()
+            if err != nil {
+                return nil, err
+            } else {
+                stmt.Keys = k
+            }
+        default:
+            return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;KEY&amp;quot;, &amp;quot;KEYS&amp;quot;}, pos)
+        }
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;WITH&amp;quot;}, pos)
+    }
+
+    // Verify end of query
+    tok, pos, lit = p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.EOF:
+    case lexer.SEMICOLON:
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;EOF&amp;quot;, &amp;quot;SEMICOLON&amp;quot;}, pos)
+    }
+
+    return stmt, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To parse the name of the keyspace we need a new method:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseKeyspace returns a keyspace title or an error
+func (p *Parser) parseKeyspace() (string, error) {
+    var keyspace string
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return &amp;quot;&amp;quot;, NewParseError(tokstr(tok, lit), []string{&amp;quot;keyspace&amp;quot;}, pos)
+    }
+    keyspace = lit
+
+    // Scan entire keyspace
+    // Keyspaces are a period delimited list of identifiers
+    var endPeriod bool
+    for {
+        tok, pos, lit = p.scan()
+        if tok == lexer.DOT {
+            keyspace += &amp;quot;.&amp;quot;
+            endPeriod = true
+        } else if tok == lexer.IDENT {
+            keyspace += lit
+            endPeriod = false
+        } else {
+            break
+        }
+    }
+
+    // remove last token
+    p.unscan()
+
+    // Keyspaces can&#39;t end on a period
+    if endPeriod {
+        return &amp;quot;&amp;quot;, NewParseError(tokstr(tok, lit), []string{&amp;quot;identifier&amp;quot;}, pos)
+    }
+    return keyspace, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Keyspace names can be a single identifier, or several identifiers divided by a period. Identifiers can also have underscores but not spaces.&lt;/p&gt;
+
+&lt;p&gt;To wrap up the &lt;code&gt;CREATE&lt;/code&gt; statement we need a method to parse a list of key names for the keyspace. Keys are identifiers that are optionally separated by a comma.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseIdentList returns a list of attributes or an error
+func (p *Parser) parseIdentList() ([]string, error) {
+    var keys []string
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return keys, NewParseError(tokstr(tok, lit), []string{&amp;quot;identifier&amp;quot;}, pos)
+    }
+    keys = append(keys, lit)
+
+    // Scan entire list
+    // Key lists are comma delimited
+    for {
+        tok, pos, lit = p.scanIgnoreWhitespace()
+        if tok == lexer.EOF {
+            break
+        } else if tok != lexer.COMMA {
+            return keys, NewParseError(tokstr(tok, lit), []string{&amp;quot;COMMA&amp;quot;, &amp;quot;EOF&amp;quot;}, pos)
+        }
+
+        k, err := p.parseIdent()
+        if err != nil {t
+            return keys, err
+        }
+        keys = append(keys, k)
+    }
+
+    // remove last token
+    p.unscan()
+
+    return keys, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;That&amp;rsquo;s all we need to parse the &lt;code&gt;CREATE&lt;/code&gt; statement. The &lt;code&gt;DROP&lt;/code&gt; statement is very similar to &lt;code&gt;CREATE&lt;/code&gt; except for the list of keys so we&amp;rsquo;re going to skip it. You can always find it in the repo if you want to see it.&lt;/p&gt;
+
+&lt;h4 id=&#34;select:adc9367f9fa0516fa308d9b9c785dca8&#34;&gt;SELECT&lt;/h4&gt;
+
+&lt;p&gt;The &lt;code&gt;SELECT&lt;/code&gt; statement is perhaps the most difficult to parse so we&amp;rsquo;ll do it next. The select query looks fairly simple but parsing the &lt;code&gt;WHERE&lt;/code&gt; clause might cause you greif. A sample query might look like this:&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;SELECT FROM users.settings WHERE user = &amp;quot;eliquious&amp;quot; AND setting = &amp;quot;email&amp;quot;;&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;There are 2 main parts to the select query: the keyspace and the where clause. So our AST node looks like this.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type SelectStatement struct {
+    Keyspace string
+    Where    []Expression
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can start parsing the query by defining the top level function.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseSelectStatement parses a string and returns an AST object.
+// This function assumes the &amp;quot;SELECT&amp;quot; token has already been consumed.
+func (p *Parser) parseSelectStatement() (Node, error) {
+
+    ks, where, err := p.parseFromWhere()
+    if err != nil {
+        return nil, err
+    }
+
+    return &amp;amp;SelectStatement{
+        Keyspace: ks,
+        Where:    where,
+    }, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;After the &lt;code&gt;SELECT&lt;/code&gt; keyword we have &lt;code&gt;FROM&lt;/code&gt; and then the keyspace name. After the keyspace name, we can parse the &lt;code&gt;WHERE&lt;/code&gt; clause.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (p *Parser) parseFromWhere() (string, []Expression, error) {
+    var keyspace string
+    var exprs []Expression
+
+    // Inspect the FROM token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case tokens.FROM:
+
+        // Parse the name of the keyspace to be used
+        lit, err := p.parseKeyspace()
+        if err != nil {
+            return &amp;quot;&amp;quot;, nil, err
+        }
+        keyspace = lit
+
+        // Inspect the WHERE token.
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case tokens.WHERE:
+
+            // Parse the WHERE clause
+            exp, err := p.parseWhereClause(true, true)
+            if err != nil {
+                return &amp;quot;&amp;quot;, nil, err
+            }
+            exprs = exp
+
+        default:
+            return &amp;quot;&amp;quot;, nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;WHERE&amp;quot;}, pos)
+        }
+
+    default:
+        return &amp;quot;&amp;quot;, nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;FROM&amp;quot;}, pos)
+    }
+    return keyspace, exprs, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Parsing the &lt;code&gt;WHERE&lt;/code&gt; is interesting and because the &lt;code&gt;UPSERT&lt;/code&gt;, &lt;code&gt;DELETE&lt;/code&gt; and &lt;code&gt;SELECT&lt;/code&gt; queries all have similar clauses, we can reuse this method. The &lt;code&gt;UPSERT&lt;/code&gt; query does not make use of &lt;code&gt;BETWEEN&lt;/code&gt; or a logical &lt;code&gt;OR&lt;/code&gt; so we can disable them by arguments.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseWhereClause parses a string and returns an AST object.
+// This function assumes the &amp;quot;WHERE&amp;quot; token has already been consumed.
+func (p *Parser) parseWhereClause(allowBetween bool, allowLogicalOR bool) ([]Expression, error) {
+    var expr []Expression
+
+    // Read expression
+    exp, err := p.parseExpression(allowBetween, allowLogicalOR)
+    if err != nil {
+        return expr, err
+    }
+    expr = append(expr, exp)
+
+OUTER:
+    for {
+
+        // Test if there is another expression
+        tok, pos, lit := p.scanIgnoreWhitespace()
+        switch tok {
+        case lexer.EOF, lexer.SEMICOLON:
+            break OUTER
+        case lexer.AND:
+
+            exp, err := p.parseExpression(allowBetween, allowLogicalOR)
+            if err != nil {
+                return expr, err
+            }
+            expr = append(expr, exp)
+
+        default:
+            return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;EOF&amp;quot;, &amp;quot;SEMICOLON&amp;quot;, &amp;quot;AND&amp;quot;}, pos)
+        }
+    }
+    return expr, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The allowed conditions are not as full featured as a traditional relational database due to the decisions made when creating the data model. Each expression is &lt;code&gt;AND&lt;/code&gt;d with the next. The only place an &lt;code&gt;OR&lt;/code&gt; is allowed is inside the equality operator (&lt;code&gt;attr = &amp;quot;name2&amp;quot; OR &amp;quot;name2&amp;quot;&lt;/code&gt;).&lt;/p&gt;
+
+&lt;p&gt;There are only 2 real types of expression operators: the equality and between operators. We can decide which expression is next via the following method. First we parse the key name, then the operator and values.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// parseExpression parses a string and returns an AST object.
+func (p *Parser) parseExpression(allowBetween, allowLogicalOR bool) (Expression, error) {
+
+    // Inspect the FROM token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    if tok != lexer.IDENT {
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;identifier&amp;quot;}, pos)
+    }
+    ident := lit
+
+    // Inspect the operator token.
+    tok, pos, lit = p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.EQ:
+        expr, err := p.parseEqualityExpression(ident, allowLogicalOR)
+        if err != nil {
+            return nil, err
+        }
+        return expr, nil
+    case tokens.BETWEEN:
+        if !allowBetween {
+            return nil, &amp;amp;ParseError{Message: &amp;quot;BETWEEN not allowed&amp;quot;, Pos: pos}
+        }
+
+        expr, err := p.parseBetweenExpression(ident)
+        if err != nil {
+            return nil, err
+        }
+        return expr, nil
+    default:
+        if allowBetween {
+            return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;EQ&amp;quot;, &amp;quot;BETWEEN&amp;quot;}, pos)
+        }
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;EQ&amp;quot;}, pos)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To parse the equality expression we define the method below. As mentioned above the equality operator can have 2 values. If after the first value, there can be an &lt;code&gt;AND&lt;/code&gt; or an &lt;code&gt;OR&lt;/code&gt; keyword.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// EqualityExpression represents a filter condition which filters based on an exact match.
+type EqualityExpression struct {
+    KeyAttribute string
+    Value        Node
+}
+
+...
+
+// parseEqualityExpression parses a string and returns an AST object.
+func (p *Parser) parseEqualityExpression(ident string, allowLogicalOR bool) (Expression, error) {
+    // expr := &amp;amp;EqualityExpression{KeyAttribute: ident}
+    // var expr Expression
+
+    // Parse the string value
+    value, err := p.parseString()
+    if err != nil {
+        return nil, err
+    }
+
+    // Inspect the AND / OR token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.AND, lexer.EOF:
+        p.unscan()
+        return EqualityExpression{KeyAttribute: ident, Value: StringLiteral{value}}, nil
+    case lexer.OR:
+        // Upserts cannot contain OR equality clauses.
+        if !allowLogicalOR {
+            return nil, &amp;amp;ParseError{Message: &amp;quot;OR not allowed&amp;quot;, Pos: pos}
+        }
+
+        values := []string{value}
+
+        // Parse the string value
+        value, err := p.parseString()
+        if err != nil {
+            return nil, err
+        }
+        values = append(values, value)
+        return EqualityExpression{KeyAttribute: ident, Value: StringLiteralGroup{Operator: OrOperator, Values: values}}, nil
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;AND&amp;quot;, &amp;quot;OR&amp;quot;}, pos)
+    }
+}
+
+// BetweenExpression represents a filter condition which filters keys between 2 given strings.
+type BetweenExpression struct {
+    KeyAttribute string
+    Values       StringLiteralGroup
+}
+
+...
+
+// parseBetweenExpression parses a string and returns an AST object.
+func (p *Parser) parseBetweenExpression(ident string) (Expression, error) {
+    expr := BetweenExpression{KeyAttribute: ident}
+
+    // Parse the string value
+    value, err := p.parseString()
+    if err != nil {
+        return nil, err
+    }
+
+    // Inspect the AND / OR token.
+    tok, pos, lit := p.scanIgnoreWhitespace()
+    switch tok {
+    case lexer.AND:
+        values := []string{value}
+
+        // Parse the string value
+        value, err := p.parseString()
+        if err != nil {
+            return nil, err
+        }
+        values = append(values, value)
+        expr.Values = StringLiteralGroup{Operator: AndOperator, Values: values}
+    default:
+        return nil, NewParseError(tokstr(tok, lit), []string{&amp;quot;AND&amp;quot;}, pos)
+    }
+    return expr, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;errors:adc9367f9fa0516fa308d9b9c785dca8&#34;&gt;Errors&lt;/h4&gt;
+
+&lt;p&gt;One thing I have left out, besides the other queries, is how errors are handled. I&amp;rsquo;ve defined a single error type for all parse errors which is called ironically a &lt;code&gt;ParseError&lt;/code&gt;. It is fairly straight forward as it will return a string whieh shows the current token vs. what was expected.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// ParseError represents an error that occurred during parsing.
+type ParseError struct {
+    Message  string
+    Found    string
+    Expected []string
+    Pos      lexer.Pos
+}
+
+// newParseError returns a new instance of ParseError.
+func NewParseError(found string, expected []string, pos lexer.Pos) *ParseError {
+    return &amp;amp;ParseError{Found: found, Expected: expected, Pos: pos}
+}
+
+// Error returns the string representation of the error.
+func (e *ParseError) Error() string {
+    if e.Message != &amp;quot;&amp;quot; {
+        return fmt.Sprintf(&amp;quot;%s at line %d, char %d&amp;quot;, e.Message, e.Pos.Line+1, e.Pos.Char+1)
+    }
+    return fmt.Sprintf(&amp;quot;found %s, expected %s at line %d, char %d&amp;quot;, e.Found, strings.Join(e.Expected, &amp;quot;, &amp;quot;), e.Pos.Line+1, e.Pos.Char+1)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;conclusion:adc9367f9fa0516fa308d9b9c785dca8&#34;&gt;Conclusion&lt;/h3&gt;
+
+&lt;p&gt;This turned out the be a very long post despite not including all of the query types. However, the additional queries use the same techniques and helper methods as the &lt;code&gt;CREATE&lt;/code&gt; and &lt;code&gt;SELECT&lt;/code&gt; statements. If you want to checkout the rest of the parser as well as how to test one, you can find the code in the &lt;a href=&#34;http://github.com/eliquious/prefixdb/&#34; title=&#34;PrefixDB on GitHub&#34;&gt;repo&lt;/a&gt;.&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Writing a database in Go: Part 2</title>
@@ -186,6 +767,8 @@ func main() {
       
       <guid>http://eliquious.github.io/post/writing-a-database-part-1/</guid>
       <description>
+
+&lt;p&gt;&lt;br/&gt;&lt;/p&gt;
 
 &lt;p&gt;Databases are a dime a dozen these days. So why in the world would I write another one? Well, mainly for fun, but also for specialization. Building a database which specializes in one thing could reap huge benefits such as performance, data model, or even operations.&lt;/p&gt;
 
