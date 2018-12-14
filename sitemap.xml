@@ -1,25 +1,67 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml">
   
   <url>
-    <loc>http://eliquious.github.io/</loc>
+    <loc>https://eliquious.github.io/post/writing-a-database-part-3/</loc>
+    <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/post/writing-a-database-part-2/</loc>
+    <lastmod>2016-01-16T20:02:44-06:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/post/writing-a-database-part-1/</loc>
+    <lastmod>2016-01-15T00:21:42-06:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/categories/</loc>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/tags/databases/</loc>
     <lastmod>2016-01-31T20:18:01-06:00</lastmod>
     <priority>0</priority>
   </url>
   
   <url>
-    <loc>http://eliquious.github.io/post/writing-a-database-part-3/</loc>
+    <loc>https://eliquious.github.io/tags/go/</loc>
     <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+    <priority>0</priority>
   </url>
   
   <url>
-    <loc>http://eliquious.github.io/post/writing-a-database-part-2/</loc>
+    <loc>https://eliquious.github.io/tags/lexical-analysis/</loc>
     <lastmod>2016-01-16T20:02:44-06:00</lastmod>
+    <priority>0</priority>
   </url>
   
   <url>
-    <loc>http://eliquious.github.io/post/writing-a-database-part-1/</loc>
-    <lastmod>2016-01-15T00:21:42-06:00</lastmod>
+    <loc>https://eliquious.github.io/tags/parsing/</loc>
+    <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/post/</loc>
+    <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/</loc>
+    <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://eliquious.github.io/tags/</loc>
+    <lastmod>2016-01-31T20:18:01-06:00</lastmod>
+    <priority>0</priority>
   </url>
   
 </urlset>
